@@ -1,3 +1,4 @@
+[![Stories in Ready](https://badge.waffle.io/dubdl2015/lit.png?label=ready&title=Ready)](https://waffle.io/dubdl2015/lit)
 # Luvit Invention Toolkit
 
 Lit is a toolkit designed to make working in the new [luvit][] 2.0 ecosystem
