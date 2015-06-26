@@ -1,7 +1,6 @@
-local core = require('autocore')
+local core = require('core')()
 local uv = require('uv')
 local pathJoin = require('luvi').path.join
-
 
 local cwd = uv.cwd()
 local source = args[2] and pathJoin(cwd, args[2])

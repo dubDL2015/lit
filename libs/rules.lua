@@ -1,5 +1,23 @@
+--[[
+
+Copyright 2014-2015 The Luvit Authors. All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS-IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+--]]
+
 local ffi = require('ffi')
-local log = require('log')
+local log = require('log').log
 local pathJoin = require('luvi').path.join
 local modes = require('git').modes
 
@@ -86,9 +104,9 @@ function exports.isAllowed(path, entry, filters)
   end
 
   if subPath then
-    if allow and not isTree and not default then
+    if allow and not isTree then
       log("including", subPath)
-    elseif not allow and default then
+    elseif not allow then
       log("skipping", subPath)
     end
   end
@@ -111,12 +129,12 @@ function exports.filterTree(db, path, hash, rules, nativeOnly) --> hash
       local entry = tree[i]
       if entry.name == "package.lua" then
         if modes.isFile(entry.mode) then
-          meta = db.loadAs("blob", entry.hash)
+          local lua = db.loadAs("blob", entry.hash)
+          meta = assert(loadstring(lua, pathJoin(path, "package.lua")))()
         end
         break
       end
     end
-    if meta then meta = loadstring(meta)() end
     if meta and meta.files then
       filters[#filters + 1] = compileFilter(path, meta.files, nativeOnly)
     end

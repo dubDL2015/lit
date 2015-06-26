@@ -1,15 +1,17 @@
-local tcp = require('coro-tcp')
+local createServer = require('coro-net').createServer
+local uv = require('uv')
 local httpCodec = require('http-codec')
 local websocketCodec = require('websocket-codec')
 
-local log = require('log')
+local log = require('log').log
 local wrapper = require('coro-wrapper')
 local readWrap, writeWrap = wrapper.reader, wrapper.writer
 local makeRemote = require('codec').makeRemote
-local handlers = require('handlers')
-local handleRequest = require('api')(args[2])
+local core = require('core')()
+local handlers = require('handlers')(core)
+local handleRequest = require('api')(core.db, args[2])
 
-tcp.createServer("127.0.0.1", 4822, function (rawRead, rawWrite, socket)
+createServer(4822, function (rawRead, rawWrite, socket)
 
   -- Handle the websocket handshake at the HTTP level
   local read, updateDecoder = readWrap(rawRead, httpCodec.decoder())
@@ -62,7 +64,11 @@ tcp.createServer("127.0.0.1", 4822, function (rawRead, rawWrite, socket)
     body = table.concat(body)
     if req.method == "GET" or req.method == "HEAD" then
       req.body = #body > 0 and body or nil
+      local now = uv.now()
       res, err = handleRequest(req)
+      local delay = (uv.now() - now) .. "ms"
+      res[#res + 1] = {"X-Request-Time", delay}
+      print(req.method .. " " .. req.path .. " " .. res.code .. " " .. delay)
     end
     if not res then
       write({code=400})

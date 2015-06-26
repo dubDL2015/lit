@@ -1,8 +1,16 @@
 exports.name = "creationix/coro-tls"
-exports.version = "1.1.2"
+exports.version = "1.2.0"
+exports.homepage = "https://github.com/luvit/lit/blob/master/deps/coro-tls.lua"
+exports.description = "A coro-stream wrapper implementing tls sessions."
+exports.tags = {"coro", "tls", "ssl"}
+exports.license = "MIT"
+exports.author = { name = "Tim Caswell" }
 
 local openssl = require('openssl')
 local bit = require('bit')
+
+local DEFAULT_CIPHERS = 'ECDHE-RSA-AES128-SHA256:AES128-GCM-SHA256:' .. -- TLS 1.2
+                        'RC4:HIGH:!MD5:!aNULL:!EDH'                     -- TLS 1.0
 
 -- Given a read/write pair, return a new read/write pair for plaintext
 exports.wrap = function (read, write, options)
@@ -10,7 +18,7 @@ exports.wrap = function (read, write, options)
     options = {}
   end
 
-  local ctx = openssl.ssl.ctx_new("TLSv1_2")
+  local ctx = openssl.ssl.ctx_new(options.protocol or 'TLSv1_2', options.ciphers or DEFAULT_CIPHERS)
 
   local key, cert, ca
   if options.key then
@@ -20,14 +28,25 @@ exports.wrap = function (read, write, options)
     cert = assert(openssl.x509.read(options.cert))
   end
   if options.ca then
-    ca = assert(openssl.x509.read(options.ca))
+    if type(options.ca) == "string" then
+      ca = { assert(openssl.x509.read(options.ca)) }
+    elseif type(options.ca) == "table" then
+      ca = {}
+      for i = 1, #options.ca do
+        ca[i] = assert(openssl.x509.read(options.ca[i]))
+      end
+    else
+      error("options.ca must be string or table of strings")
+    end
   end
   if key and cert then
     assert(ctx:use(key, cert))
   end
   if ca then
     local store = openssl.x509.store:new()
-    assert(store:add(ca))
+    for i = 1, #ca do
+      assert(store:add(ca[i]))
+    end
     ctx:cert_store(store)
   else
     ctx:verify_mode({"none"})
@@ -38,7 +57,7 @@ exports.wrap = function (read, write, options)
     openssl.ssl.no_sslv3,
     openssl.ssl.no_compression))
   local bin, bout = openssl.bio.mem(8192), openssl.bio.mem(8192)
-  local ssl = ctx:ssl(bin, bout, false)
+  local ssl = ctx:ssl(bin, bout, options.server)
 
   local function flush()
     while bout:pending() > 0 do
@@ -50,8 +69,14 @@ exports.wrap = function (read, write, options)
   while true do
     if ssl:handshake() then break end
     flush()
-    bin:write(read())
+    local chunk = read()
+    if chunk then
+      bin:write(chunk)
+    else
+      error("disconnect while handshaking")
+    end
   end
+  flush()
 
   local done = false
   local function shutdown()

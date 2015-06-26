@@ -1,4 +1,22 @@
 --[[
+
+Copyright 2014-2015 The Luvit Authors. All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS-IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+--]]
+
+--[[
 Package Metadata Commands
 ================
 
@@ -15,7 +33,8 @@ local pathJoin = require('luvi').path.join
 local listToMap = require('git').listToMap
 
 local function evalModule(data, name)
-  local fn = assert(loadstring(data, name))
+  local fn, err = loadstring(data, name)
+  if not fn then return nil, err end
   local exports = {}
   local module = { exports = exports }
   setfenv(fn, {
@@ -33,14 +52,19 @@ end
 local validKeys = {
   name = "string",
   version = "string",
+  private = "boolean", -- Don't allow publishing.
+  obsolete = "boolean", -- Hide from search results.
   description = "string",
   keywords = "table", -- list of strings
+  tags = "table", -- list of strings
   homepage = "string",
   license = "string",
+  licenses = "table", -- table of strings
   author = "table", -- person {name=name, email=email, url=url}
   contributors = "table", -- list of people
   dependencies = "table", -- list of strings
-  luvi = "table", -- {flavor=flavor,version=version}
+  luvi = "table", -- {flavor=flavor,version=version},
+  files = "table",
 }
 
 function exports.query(fs, path)
@@ -68,6 +92,7 @@ function exports.query(fs, path)
   end
   local meta = evalModule(data, packagePath)
   local clean = {}
+  if not meta then return nil, "No meta found" end
   for key, value in pairs(meta) do
     if type(value) == validKeys[key] then
       clean[key] = value
@@ -79,6 +104,7 @@ end
 function exports.queryDb(db, hash)
   local kind, value = db.loadAny(hash)
   if kind == "tag" then
+    hash = value.object
     kind, value = db.loadAny(value.object)
   end
   local meta
@@ -101,7 +127,7 @@ function exports.queryDb(db, hash)
   else
     error("Illegal kind: " .. kind)
   end
-  return meta, kind
+  return meta, kind, hash
 end
 
 function exports.normalize(meta)
